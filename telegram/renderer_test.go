@@ -257,7 +257,7 @@ func TestCallout(t *testing.T) {
 		{
 			name: "line breaks stay inside the quote",
 			node: plate.Node{Type: "callout", Icon: "⚠️", Children: []plate.Node{{Text: "First\nSecond"}}},
-			want: ">⚠️ First\n>Second",
+			want: ">⚠️ First<br>Second",
 		},
 		{
 			name: "inline formatting",
@@ -495,6 +495,61 @@ func TestMention(t *testing.T) {
 			name: "name is escaped",
 			node: plate.Node{Type: "mention", Value: "a*b", Children: []plate.Node{{Text: ""}}},
 			want: "@a\\*b",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderNode(tt.node); got != tt.want {
+				t.Errorf("renderNode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLineBreaks(t *testing.T) {
+	tests := []struct {
+		name string
+		node plate.Node
+		want string
+	}{
+		{
+			name: "paragraph",
+			node: plate.Node{Type: "p", Children: []plate.Node{{Text: "Line one\nLine two"}}},
+			want: "Line one<br>Line two",
+		},
+		{
+			name: "windows line ending",
+			node: plate.Node{Type: "p", Children: []plate.Node{{Text: "One\r\nTwo"}}},
+			want: "One<br>Two",
+		},
+		{
+			name: "inside formatting",
+			node: plate.Node{Type: "p", Children: []plate.Node{{Text: "Bold\nstill bold", Bold: true}}},
+			want: "**Bold<br>still bold**",
+		},
+		{
+			name: "escaped angle brackets are not confused with the tag",
+			node: plate.Node{Type: "p", Children: []plate.Node{{Text: "a < b\nc > d"}}},
+			want: "a &lt; b<br>c &gt; d",
+		},
+		{
+			name: "inline quote",
+			node: plate.Node{Type: "blockquote", Children: []plate.Node{{Text: "First\nSecond"}}},
+			want: ">First<br>Second",
+		},
+		{
+			name: "table cell",
+			node: plate.Node{Type: "table", Children: []plate.Node{
+				{Type: "tr", Children: []plate.Node{{Type: "th", Children: []plate.Node{paragraph("Head", 0)}}}},
+				{Type: "tr", Children: []plate.Node{{Type: "td", Children: []plate.Node{paragraph("One\nTwo", 0)}}}},
+			}},
+			want: "| Head |\n|:---------|\n| One<br>Two |",
+		},
+		{
+			name: "code blocks keep real newlines",
+			node: plate.Node{Type: "code_block", Children: []plate.Node{codeLine("a\nb")}},
+			want: "```\na\nb\n```",
 		},
 	}
 

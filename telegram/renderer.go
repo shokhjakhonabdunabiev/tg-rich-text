@@ -152,8 +152,13 @@ func renderChildren(nodes []plate.Node) string {
 	return result.String()
 }
 
+// lineBreaker turns line breaks inside a block (Shift+Enter in Plate) into <br>:
+// Rich Markdown joins consecutive lines into one, like GFM, and <br> is a
+// supported rich message HTML tag that also works in table cells.
+var lineBreaker = strings.NewReplacer("\r\n", "<br>", "\n", "<br>")
+
 func renderText(node plate.Node) string {
-	text := escapeText(node.Text)
+	text := lineBreaker.Replace(escapeText(node.Text))
 	if node.Bold {
 		// "__bold text__" (also valid)
 		text = "**" + text + "**"
