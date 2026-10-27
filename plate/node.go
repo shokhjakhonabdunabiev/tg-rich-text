@@ -17,6 +17,13 @@ type Node struct {
 
 	Identifier string `json:"identifier,omitempty"`
 
+	// callout
+	Icon string `json:"icon,omitempty"`
+	// mention: the mentioned name
+	Value string `json:"value,omitempty"`
+	// img (and other media): caption text nodes
+	Caption []Node `json:"caption,omitempty"`
+
 	Bold          bool `json:"bold,omitempty"`
 	Italic        bool `json:"italic,omitempty"`
 	Underline     bool `json:"underline,omitempty"`
