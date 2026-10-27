@@ -173,13 +173,17 @@ func TestDate(t *testing.T) {
 	}
 }
 
+func codeLine(text string) plate.Node {
+	return plate.Node{Type: "code_line", Children: []plate.Node{{Text: text}}}
+}
+
 func TestCodeBlock(t *testing.T) {
 	tests := []struct {
 		name string
 		node plate.Node
 		want string
 	}{
-		{name: "date", node: plate.Node{
+		{name: "single text node", node: plate.Node{
 			Type: "code_block",
 			Lang: "go",
 			Children: []plate.Node{
@@ -190,6 +194,29 @@ func TestCodeBlock(t *testing.T) {
 				},
 			},
 		}, want: "```go\nfunc main() {\n\tfmt.Println(\"Hello, world!\")\n}\n```"},
+		{name: "code lines are separate lines", node: plate.Node{
+			Type: "code_block",
+			Lang: "javascript",
+			Children: []plate.Node{
+				codeLine("function hello() {"),
+				codeLine("  console.info('hi');"),
+				codeLine("}"),
+			},
+		}, want: "```javascript\nfunction hello() {\n  console.info('hi');\n}\n```"},
+		{name: "empty lines are kept", node: plate.Node{
+			Type:     "code_block",
+			Children: []plate.Node{codeLine("a := 1"), codeLine(""), codeLine("b := 2")},
+		}, want: "```\na := 1\n\nb := 2\n```"},
+		{name: "markdown characters are not escaped", node: plate.Node{
+			Type:     "code_block",
+			Lang:     "js",
+			Children: []plate.Node{codeLine("if (a == b && c < d || *p) { x = `t` }")},
+		}, want: "```js\nif (a == b && c < d || *p) { x = `t` }\n```"},
+		{name: "fence longer than backticks in the code", node: plate.Node{
+			Type:     "code_block",
+			Lang:     "md",
+			Children: []plate.Node{codeLine("```go"), codeLine("x := 1"), codeLine("```")},
+		}, want: "````md\n```go\nx := 1\n```\n````"},
 	}
 
 	for _, tt := range tests {

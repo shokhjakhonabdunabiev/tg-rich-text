@@ -191,9 +191,32 @@ func renderEquation(node plate.Node) string {
 	return "```math\n" + node.TexExpression + "\n```"
 }
 
+// renderCodeBlock renders each code_line as its own line. Code is emitted raw: fenced
+// code is shown literally, so Markdown escapes would appear in the message.
 func renderCodeBlock(node plate.Node) string {
-	code := renderChildren(node.Children)
-	return "```" + node.Lang + "\n" + code + "\n```"
+	lines := make([]string, len(node.Children))
+	for i, child := range node.Children {
+		lines[i] = plainText([]plate.Node{child})
+	}
+	code := strings.Join(lines, "\n")
+
+	fence := codeFence(code)
+	return fence + node.Lang + "\n" + code + "\n" + fence
+}
+
+// codeFence returns a backtick fence longer than any backtick run in the code,
+// so code containing ``` cannot close the block early.
+func codeFence(code string) string {
+	longest, run := 0, 0
+	for _, r := range code {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return strings.Repeat("`", max(3, longest+1))
 }
 
 func renderHr() string {
