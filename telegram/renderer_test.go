@@ -289,7 +289,7 @@ func TestImage(t *testing.T) {
 		{
 			name: "without caption",
 			node: plate.Node{Type: "img", URL: "https://example.com/photo.jpg", Children: []plate.Node{{Text: ""}}},
-			want: "\n![](https://example.com/photo.jpg)\n",
+			want: "![](https://example.com/photo.jpg)",
 		},
 		{
 			name: "with caption",
@@ -298,7 +298,7 @@ func TestImage(t *testing.T) {
 				URL:     "https://example.com/photo.jpg",
 				Caption: []plate.Node{{Text: "A "}, {Text: "sunset", Bold: true}},
 			},
-			want: "\n![](https://example.com/photo.jpg \"A sunset\")\n",
+			want: "![](https://example.com/photo.jpg \"A sunset\")",
 		},
 		{
 			name: "caption quotes and URL spaces are escaped",
@@ -307,7 +307,7 @@ func TestImage(t *testing.T) {
 				URL:     "https://example.com/my photo (1).jpg",
 				Caption: []plate.Node{{Text: `The "best" \ shot`}},
 			},
-			want: "\n![](https://example.com/my%20photo%20%281%29.jpg \"The \\\"best\\\" \\\\ shot\")\n",
+			want: "![](https://example.com/my%20photo%20%281%29.jpg \"The \\\"best\\\" \\\\ shot\")",
 		},
 	}
 
@@ -337,17 +337,17 @@ func TestToggle(t *testing.T) {
 		{
 			name:  "encloses following indented blocks",
 			nodes: []plate.Node{toggle("More", 0), paragraph("Inside", 1), paragraph("After", 0)},
-			want:  "<details><summary>More</summary>\nInside\n</details>\nAfter",
+			want:  "<details><summary>More</summary>\nInside\n</details>\n\nAfter",
 		},
 		{
 			name:  "empty toggle",
 			nodes: []plate.Node{toggle("Nothing here", 0), paragraph("After", 0)},
-			want:  "<details><summary>Nothing here</summary>\n</details>\nAfter",
+			want:  "<details><summary>Nothing here</summary>\n</details>\n\nAfter",
 		},
 		{
 			name:  "toggle at the end of the document",
 			nodes: []plate.Node{paragraph("Before", 0), toggle("More", 0), paragraph("A", 1), paragraph("B", 2)},
-			want:  "Before\n<details><summary>More</summary>\nA\nB\n</details>",
+			want:  "Before\n\n<details><summary>More</summary>\nA\n\nB\n</details>",
 		},
 		{
 			name: "nested toggles",
@@ -359,9 +359,9 @@ func TestToggle(t *testing.T) {
 				paragraph("Back in outer", 1),
 				paragraph("After", 0),
 			},
-			want: "<details><summary>Outer</summary>\nOuter body\n" +
-				"<details><summary>Inner</summary>\nInner body\n</details>\n" +
-				"Back in outer\n</details>\nAfter",
+			want: "<details><summary>Outer</summary>\nOuter body\n\n" +
+				"<details><summary>Inner</summary>\nInner body\n</details>\n\n" +
+				"Back in outer\n</details>\n\nAfter",
 		},
 		{
 			name: "list items use their indent minus one",
@@ -370,7 +370,7 @@ func TestToggle(t *testing.T) {
 				{ListStyleType: "decimal", Indent: 2, Children: []plate.Node{{Text: "Inside"}}},
 				{ListStyleType: "disc", Indent: 1, Children: []plate.Node{{Text: "Outside"}}},
 			},
-			want: "<details><summary>Steps</summary>\n1. Inside\n</details>\n- Outside",
+			want: "<details><summary>Steps</summary>\n1. Inside\n</details>\n\n- Outside",
 		},
 		{
 			name: "summary keeps inline formatting",
@@ -386,6 +386,122 @@ func TestToggle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := renderRichMarkdown(tt.nodes); got != tt.want {
 				t.Errorf("renderRichMarkdown() =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+func listItem(style, text string) plate.Node {
+	return plate.Node{Type: "p", ListStyleType: style, Indent: 1, Children: []plate.Node{{Text: text}}}
+}
+
+func TestBlockSeparation(t *testing.T) {
+	tests := []struct {
+		name  string
+		nodes []plate.Node
+		want  string
+	}{
+		{
+			name:  "paragraphs are separated by a blank line",
+			nodes: []plate.Node{paragraph("One", 0), paragraph("Two", 0)},
+			want:  "One\n\nTwo",
+		},
+		{
+			name:  "items of one list stay together",
+			nodes: []plate.Node{paragraph("Intro", 0), listItem("disc", "A"), listItem("disc", "B"), paragraph("Outro", 0)},
+			want:  "Intro\n\n- A\n- B\n\nOutro",
+		},
+		{
+			name:  "different lists are separate blocks",
+			nodes: []plate.Node{listItem("disc", "A"), listItem("decimal", "B")},
+			want:  "- A\n\n1. B",
+		},
+		{
+			name:  "empty paragraphs are skipped",
+			nodes: []plate.Node{paragraph("One", 0), {Type: "p", Children: []plate.Node{{Text: ""}}}, paragraph("Two", 0)},
+			want:  "One\n\nTwo",
+		},
+		{
+			name:  "divider",
+			nodes: []plate.Node{paragraph("Above", 0), {Type: "hr", Children: []plate.Node{{Text: ""}}}, paragraph("Below", 0)},
+			want:  "Above\n\n---\n\nBelow",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderRichMarkdown(tt.nodes); got != tt.want {
+				t.Errorf("renderRichMarkdown() =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBlockquote(t *testing.T) {
+	tests := []struct {
+		name string
+		node plate.Node
+		want string
+	}{
+		{
+			name: "inline content",
+			node: plate.Node{Type: "blockquote", Children: []plate.Node{{Text: "Quoted "}, {Text: "text", Bold: true}}},
+			want: ">Quoted **text**",
+		},
+		{
+			name: "paragraphs, list and nested quote",
+			node: plate.Node{Type: "blockquote", Children: []plate.Node{
+				paragraph("First paragraph.", 0),
+				paragraph("Second paragraph.", 0),
+				listItem("disc", "Quoted item"),
+				{Type: "blockquote", Children: []plate.Node{paragraph("Nested quote.", 0)}},
+			}},
+			want: ">First paragraph.\n>\n>Second paragraph.\n>\n>- Quoted item\n>\n>>Nested quote.",
+		},
+		{
+			name: "nested quote with several paragraphs",
+			node: plate.Node{Type: "blockquote", Children: []plate.Node{
+				{Type: "blockquote", Children: []plate.Node{paragraph("A", 0), paragraph("B", 0)}},
+			}},
+			want: ">>A\n>>\n>>B",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderNode(tt.node); got != tt.want {
+				t.Errorf("renderNode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMention(t *testing.T) {
+	tests := []struct {
+		name string
+		node plate.Node
+		want string
+	}{
+		{
+			name: "in a paragraph",
+			node: plate.Node{Type: "p", Children: []plate.Node{
+				{Text: "Thanks "},
+				{Type: "mention", Value: "Alice", Children: []plate.Node{{Text: ""}}},
+				{Text: "!"},
+			}},
+			want: "Thanks @Alice!",
+		},
+		{
+			name: "name is escaped",
+			node: plate.Node{Type: "mention", Value: "a*b", Children: []plate.Node{{Text: ""}}},
+			want: "@a\\*b",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderNode(tt.node); got != tt.want {
+				t.Errorf("renderNode() = %q, want %q", got, tt.want)
 			}
 		})
 	}

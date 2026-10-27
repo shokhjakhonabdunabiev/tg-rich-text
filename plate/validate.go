@@ -33,7 +33,7 @@ func validateNode(node Node, path string, depth int) error {
 		case "", "p", "a", "date", "h1", "h2", "h3", "h4", "h5", "h6",
 			"inline_equation", "equation", "code_line", "code_block", "hr",
 			"blockquote", "table", "tr", "th", "td", "li", "footnoteReference", "footnoteDefinition",
-			"callout", "toggle", "img":
+			"callout", "toggle", "img", "mention":
 		default:
 			return fmt.Errorf("%s.type: unsupported node type %q", path, node.Type)
 		}

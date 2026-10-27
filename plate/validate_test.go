@@ -13,6 +13,7 @@ func TestValidateNewBlocks(t *testing.T) {
 	}{
 		{name: "callout", node: Node{Type: "callout", Icon: "💡", Children: []Node{{Text: "Tip"}}}},
 		{name: "toggle", node: Node{Type: "toggle", Children: []Node{{Text: "More"}}}},
+		{name: "mention", node: Node{Type: "mention", Value: "Alice", Children: []Node{{Text: ""}}}},
 		{name: "image", node: Node{Type: "img", URL: "https://example.com/a.png", Caption: []Node{{Text: "Caption"}}}},
 		{name: "image with uppercase scheme", node: Node{Type: "img", URL: "HTTPS://example.com/a.png"}},
 		{name: "image without URL", node: Node{Type: "img"}, wantErr: "[0].url: must not be empty"},

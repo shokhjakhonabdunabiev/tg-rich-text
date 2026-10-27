@@ -16,25 +16,44 @@ func renderRichMarkdown(nodes []plate.Node) string {
 // renderBlocks renders a list of sibling blocks. Plate toggles are not containers:
 // a toggle encloses the blocks that follow it with a greater indent, so those are
 // grouped into the toggle's <details> block here.
+//
+// Blocks are separated by a blank line: in Rich Markdown, as in GFM, consecutive
+// lines continue the same paragraph. Items of the same list stay on adjacent lines.
 func renderBlocks(nodes []plate.Node) string {
 	var result strings.Builder
+	var prev *plate.Node
 	for i := 0; i < len(nodes); {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-
 		node := nodes[i]
+
+		var block string
 		if node.Type == "toggle" {
 			end := toggleEnd(nodes, i)
-			result.WriteString(renderToggle(node, nodes[i+1:end]))
+			block = renderToggle(node, nodes[i+1:end])
 			i = end
+		} else {
+			block = renderNode(node)
+			i++
+		}
+		if block == "" {
 			continue
 		}
 
-		result.WriteString(renderNode(node))
-		i++
+		if prev != nil {
+			if sameList(*prev, node) {
+				result.WriteString("\n")
+			} else {
+				result.WriteString("\n\n")
+			}
+		}
+		result.WriteString(block)
+		prev = &node
 	}
 	return result.String()
+}
+
+// sameList reports whether b continues the list that a belongs to.
+func sameList(a, b plate.Node) bool {
+	return a.ListStyleType != "" && a.ListStyleType == b.ListStyleType
 }
 
 // toggleEnd returns the index just past the blocks enclosed by the toggle at nodes[start].
@@ -118,6 +137,8 @@ func renderNode(node plate.Node) string {
 		return renderToggle(node, nil)
 	case "img":
 		return renderImage(node)
+	case "mention":
+		return renderMention(node)
 	default:
 		return renderChildren(node.Children)
 	}
@@ -220,7 +241,7 @@ func codeFence(code string) string {
 }
 
 func renderHr() string {
-	return "\n---\n"
+	return "---"
 }
 
 func renderList(node plate.Node) string {
@@ -243,8 +264,31 @@ func renderList(node plate.Node) string {
 	}
 }
 
+// renderBlockquote quotes either inline content or nested blocks (paragraphs, lists,
+// nested quotes). Every line is prefixed, so blank separator lines become ">".
 func renderBlockquote(node plate.Node) string {
+	if hasBlockChildren(node) {
+		return quoteLines(renderBlocks(node.Children))
+	}
 	return quoteLines(renderChildren(node.Children))
+}
+
+var inlineTypes = map[string]bool{
+	"":                  true, // text nodes
+	"a":                 true,
+	"date":              true,
+	"inline_equation":   true,
+	"mention":           true,
+	"footnoteReference": true,
+}
+
+func hasBlockChildren(node plate.Node) bool {
+	for _, child := range node.Children {
+		if child.ListStyleType != "" || !inlineTypes[child.Type] {
+			return true
+		}
+	}
+	return false
 }
 
 func quoteLines(text string) string {
@@ -291,14 +335,24 @@ var mediaURLEscaper = strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29")
 
 var mediaCaptionEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 
-// renderImage renders an image as a separate media block; the caption becomes the title.
-// Blank lines around it keep it from being parsed as part of a neighbouring paragraph.
+// renderImage renders an image as a media block; the caption becomes the title.
+// Telegram requires media to be a separate block, which the blank lines that
+// renderBlocks puts between blocks guarantee.
 func renderImage(node plate.Node) string {
 	image := "![](" + mediaURLEscaper.Replace(node.URL)
 	if caption := strings.TrimSpace(plainText(node.Caption)); caption != "" {
 		image += ` "` + mediaCaptionEscaper.Replace(caption) + `"`
 	}
-	return "\n" + image + ")\n"
+	return image + ")"
+}
+
+// renderMention renders a Plate mention as "@name". Plate mentions name people in
+// the author's workspace, not Telegram users, so no tg://user link is created.
+func renderMention(node plate.Node) string {
+	if node.Value == "" {
+		return renderChildren(node.Children)
+	}
+	return "@" + escapeText(node.Value)
 }
 
 // plainText concatenates the text of nodes, ignoring formatting.
