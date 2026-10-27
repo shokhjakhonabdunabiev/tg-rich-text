@@ -1,4 +1,4 @@
-package plate
+package telegram
 
 import "testing"
 
